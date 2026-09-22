@@ -1,4 +1,11 @@
-# Sora article → Jev decisions
+# ask-jev skill
+
+The main purpose of this repository is the [ask-jev skill](ask-jev/SKILL.md),
+located in the [`ask-jev/`](ask-jev/) subfolder. The Sora article and accompanying
+script demonstrate how to use this skill to turn article text into structured
+Jev decisions.
+
+## Demonstration: Sora article → Jev decisions
 
 `article.md` contains the user-supplied article as plain Markdown. Its claims
 are input for analysis, not independently verified facts.
