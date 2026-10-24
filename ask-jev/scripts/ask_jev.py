@@ -94,6 +94,8 @@ def ask(payload):
 
 
 if __name__ == "__main__":
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
     try:
         print(json.dumps(ask(json.load(sys.stdin)), ensure_ascii=False, indent=2))
     except (ValueError, OSError, http.client.HTTPException) as error:

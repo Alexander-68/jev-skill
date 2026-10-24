@@ -63,6 +63,7 @@ QUESTIONS = {
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("article", type=Path, help="UTF-8 article Markdown file")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON without calling Jev")
@@ -84,7 +85,7 @@ def main():
         return
     helper = Path(__file__).resolve().parent / "ask-jev/scripts/ask_jev.py"
     started = perf_counter()
-    result = subprocess.run([sys.executable, str(helper)], input=payload, text=True)
+    result = subprocess.run([sys.executable, str(helper)], input=payload, encoding="utf-8")
     elapsed_ms = (perf_counter() - started) * 1000
     print(f"Jev call: {elapsed_ms:.1f} ms (includes helper startup)", file=sys.stderr)
     raise SystemExit(result.returncode)

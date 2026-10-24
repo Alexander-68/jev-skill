@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as folder:
     text = "# Synthetic article\n\nAn API shutdown is scheduled. 退款\n"
     article.write_text(text, encoding="utf-8")
     command = [sys.executable, str(script), str(article), "--dry-run"]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    result = subprocess.run(command, capture_output=True, encoding="utf-8", check=True)
     payload = json.loads(result.stdout)
     assert payload["state"] == text
     assert sorted(q["type"] for q in payload["questions"].values()) == [
