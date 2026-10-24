@@ -47,8 +47,8 @@ python3 ask_images.py .            # One billable call per image
 ```
 
 Each image goes into `state` as an `image_url` part holding a base64 data URL.
-Images that are not PNG/JPEG or exceed Jev's 1,568-pixel side limit are shrunk
-and sent as PNG. Requires Pillow.
+Images that are not PNG/JPEG or fall outside Jev's 280–1,568-pixel side limits
+are scaled into range and sent as PNG. Requires Pillow.
 
 Offline checks:
 

@@ -18,7 +18,7 @@ from ask_jev import ask, validate
 
 
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
-MAX_SIDE = 1568  # Jev's per-side limit; it rejects rather than resizes
+MIN_SIDE, MAX_SIDE = 280, 1568  # Jev's per-side limits; it rejects rather than resizes
 COUNTS = {
     "none": "Visible {0}: zero.",
     "1": "Visible {0}: exactly one.",
@@ -41,15 +41,18 @@ for target, (plural, _) in TARGETS.items():
 
 
 def request_for(image):
-    # ponytail: Jev takes png/jpeg up to MAX_SIDE, so anything else is shrunk and
-    # re-encoded as png; images under Jev's 256 px minimum are left for it to reject.
+    # Jev takes png/jpeg with sides in MIN_SIDE..MAX_SIDE, so anything else is
+    # scaled into range and re-encoded as png.
+    # ponytail: extreme aspect ratios get clamped (distorted); crop if that matters.
     picture = Image.open(image)
-    if picture.format in ("PNG", "JPEG") and max(picture.size) <= MAX_SIDE:
+    width, height = picture.size
+    scale = min(MAX_SIDE / max(width, height), max(MIN_SIDE / min(width, height), 1))
+    if picture.format in ("PNG", "JPEG") and scale == 1:
         data, mime = image.read_bytes(), picture.format.lower()
     else:
-        picture.thumbnail((MAX_SIDE, MAX_SIDE))
+        size = [max(MIN_SIDE, min(MAX_SIDE, round(side * scale))) for side in picture.size]
         buffer = io.BytesIO()
-        picture.save(buffer, "PNG")
+        picture.resize(size).save(buffer, "PNG")
         data, mime = buffer.getvalue(), "png"
     url = f"data:image/{mime};base64," + base64.b64encode(data).decode("ascii")
     return {

@@ -57,7 +57,7 @@ base64 data URL, text before images:
 `{"state": ["Door camera frame:", {"type": "image_url", "image_url": {"url":
 "data:image/jpeg;base64,..."}}], "questions": {...}}`. The Decisions API takes
 only `data:image/png` or `data:image/jpeg` URLs, not HTTP(S) links; convert
-others (for example webp) first. Images must be 256–1,568 pixels per side,
+others (for example webp) first. Images must be 280–1,568 pixels per side,
 78,400–2,458,624 pixels in total, and at most 16 MiB decoded; Jev rejects rather
 than resizes. No extra headers are needed. `box` questions need an image in `state`.
 Images go to OpenRouter and TypeSafe.

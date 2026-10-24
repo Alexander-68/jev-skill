@@ -25,6 +25,7 @@ with tempfile.TemporaryDirectory() as folder:
     Image.new("RGB", (200, 100), "white").save(folder / "a.webp")
     Image.new("RGB", (200, 100), "white").save(folder / "b.jpg")
     Image.new("RGB", (3000, 1500), "white").save(folder / "big.jpg")
+    Image.new("RGB", (400, 300), "white").save(folder / "ok.jpg")
     (folder / "notes.txt").write_text("not an image")
 
     def sent(name):
@@ -34,9 +35,11 @@ with tempfile.TemporaryDirectory() as folder:
 
     request = ask_images.request_for(folder / "a.webp")
     assert sent("a.webp")[0] == "data:image/png;base64" and sent("a.webp")[1].format == "PNG"
-    assert sent("b.jpg")[0] == "data:image/jpeg;base64"
+    assert sent("ok.jpg")[0] == "data:image/jpeg;base64"  # in range: sent as is
     head, big = sent("big.jpg")
     assert head == "data:image/png;base64" and big.size == (1568, 784)
+    head, small = sent("b.jpg")
+    assert head == "data:image/png;base64" and small.size == (560, 280)
     assert set(request["questions"]["cat_count"]["criteria"]) == {
         "none", "1", "2", "3", "more_than_3"}
 
@@ -45,7 +48,7 @@ with tempfile.TemporaryDirectory() as folder:
             patch("ask_images.ask", return_value={"answers": answers}) as call, \
             redirect_stdout(out):
         ask_images.main()
-    assert call.call_count == 3
+    assert call.call_count == 4
     assert json.loads(out.getvalue())["a.webp"]["visualization"] == "a.jev.png"
     drawn = Image.open(folder / "a.jev.png")
     assert drawn.getpixel((0, 50)) == (255, 255, 255)  # no person box when count is none
@@ -55,6 +58,6 @@ with tempfile.TemporaryDirectory() as folder:
             patch("ask_images.ask", return_value={"answers": answers}) as call, \
             redirect_stdout(io.StringIO()):
         ask_images.main()  # earlier .jev.png outputs are not re-sent
-    assert call.call_count == 3
+    assert call.call_count == 4
 
 print("Offline image checks passed.")
