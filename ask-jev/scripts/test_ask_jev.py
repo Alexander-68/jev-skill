@@ -37,22 +37,24 @@ with patch.dict("os.environ", {"JEV_API_KEY": "test-key"}), \
     assert "TypeSafe-Danger-Zone-Images" not in headers
     connection.close.assert_called_once()
 
-    image = {"state": "photo", "assets": {"photo": {
-        "type": "image", "format": "png", "data_base64": "x" * MAX_REQUEST_BYTES}},
-        "questions": {"cat": {"type": "box", "instructions": "Locate the cat."}}}
+    photo = {"type": "image_url",
+             "image_url": {"url": "data:image/png;base64," + "x" * MAX_REQUEST_BYTES}}
+    image = {"state": ["Photo:", photo],
+             "questions": {"cat": {"type": "box", "instructions": "Locate the cat."}}}
     boxed = {"answers": {"cat": {"type": "box", "confidence": None, "box": {
         "top": 0.1, "bottom": 0.9, "left": 0.2, "right": 0.8}}}}
     response.read.return_value = json.dumps(boxed).encode()
     assert ask(image) == boxed  # image bytes do not count toward the text budget
     method, path, body, headers = connection.request.call_args.args
-    assert json.loads(body)["assets"] == image["assets"]
-    assert headers["TypeSafe-Danger-Zone-Images"] == "true"
+    assert json.loads(body)["state"] == image["state"]
+    assert not any(h.startswith("TypeSafe") for h in headers)
     response.read.return_value = json.dumps(result).encode()
     calls = connection.request.call_count
-    bad_images = [{**image, "assets": {}}, {**image, "assets": {"photo": {
-        **image["assets"]["photo"], "format": "webp"}}},
-        {**image, "questions": {"cat": {**image["questions"]["cat"], "criteria": {}}}},
-        {k: v for k, v in image.items() if k != "assets"}]
+    bad_images = [{**image, "state": ["Photo:", {**photo, "image_url": {"url": url}}]}
+                  for url in ("https://example.com/cat.png", "data:image/webp;base64,x",
+                              "data:image/png;base64,")]
+    bad_images += [{**image, "state": "Photo"}, {**image, "assets": {}},
+                   {**image, "questions": {"cat": {**image["questions"]["cat"], "criteria": {}}}}]
     for bad in bad_images:
         try:
             ask(bad)

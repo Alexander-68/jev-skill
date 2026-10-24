@@ -46,8 +46,9 @@ python3 ask_images.py . --dry-run  # Preview requests; no API call
 python3 ask_images.py .            # One billable call per image
 ```
 
-Requires Pillow. Image input is documented for TypeSafe's API but not for
-OpenRouter's Decisions API, so OpenRouter may reject these requests.
+Each image goes into `state` as an `image_url` part holding a base64 data URL.
+Images that are not PNG/JPEG or exceed Jev's 1,568-pixel side limit are shrunk
+and sent as PNG. Requires Pillow.
 
 Offline checks:
 

@@ -52,13 +52,14 @@ Create a `questions` object keyed by short, stable IDs. Each question has
 
 ### Images
 
-Add a top-level `assets` object keyed by a placeholder name; use that name as
-the whole `state` (or inside it, instructions, or criteria) where the image goes:
-`{"state": "photo", "assets": {"photo": {"type": "image", "format": "png",
-"data_base64": "..."}}, "questions": {...}}`. Formats are `png`, `jpg`, `jpeg`;
-convert others (for example webp) first. The helper then sends the
-`TypeSafe-Danger-Zone-Images: true` header. Image input is documented by
-TypeSafe, not OpenRouter; if OpenRouter rejects it, report the error.
+Make `state` an array and put each image in it as an `image_url` part holding a
+base64 data URL, text before images:
+`{"state": ["Door camera frame:", {"type": "image_url", "image_url": {"url":
+"data:image/jpeg;base64,..."}}], "questions": {...}}`. The Decisions API takes
+only `data:image/png` or `data:image/jpeg` URLs, not HTTP(S) links; convert
+others (for example webp) first. Images must be 256–1,568 pixels per side,
+78,400–2,458,624 pixels in total, and at most 16 MiB decoded; Jev rejects rather
+than resizes. No extra headers are needed. `box` questions need an image in `state`.
 Images go to OpenRouter and TypeSafe.
 
 Use one question per judgment and batch questions sharing the same context into
@@ -73,7 +74,7 @@ only when that preserves its intent. Do not use Jev for arithmetic or counting.
 
 Jev Latest currently has a [32,000-token context window](https://openrouter.ai/~typesafe/jev-latest)
 (verified September 22, 2026). Budget the state, question IDs, instructions, and
-all criteria together. Image `assets` are not counted by the guard.
+all criteria together. Image parts are not counted by the guard.
 The helper enforces a conservative 32,000-byte limit on ASCII-serialized request
 JSON before opening a connection. This is not an exact token count and may reject
 text that would fit; escaped Unicode also counts toward the budget. No output

@@ -18,6 +18,7 @@ from ask_jev import ask, validate
 
 
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_SIDE = 1568  # Jev's per-side limit; it rejects rather than resizes
 COUNTS = {
     "none": "Visible {0}: zero.",
     "1": "Visible {0}: exactly one.",
@@ -40,18 +41,20 @@ for target, (plural, _) in TARGETS.items():
 
 
 def request_for(image):
-    # ponytail: Jev takes png/jpg only, so anything else (webp) is re-encoded as png.
-    if image.suffix.lower() in (".png", ".jpg", ".jpeg"):
-        data, fmt = image.read_bytes(), image.suffix.lower().lstrip(".")
+    # ponytail: Jev takes png/jpeg up to MAX_SIDE, so anything else is shrunk and
+    # re-encoded as png; images under Jev's 256 px minimum are left for it to reject.
+    picture = Image.open(image)
+    if picture.format in ("PNG", "JPEG") and max(picture.size) <= MAX_SIDE:
+        data, mime = image.read_bytes(), picture.format.lower()
     else:
+        picture.thumbnail((MAX_SIDE, MAX_SIDE))
         buffer = io.BytesIO()
-        Image.open(image).save(buffer, "PNG")
-        data, fmt = buffer.getvalue(), "png"
+        picture.save(buffer, "PNG")
+        data, mime = buffer.getvalue(), "png"
+    url = f"data:image/{mime};base64," + base64.b64encode(data).decode("ascii")
     return {
-        "state": "photo",
+        "state": ["Photo:", {"type": "image_url", "image_url": {"url": url}}],
         "questions": QUESTIONS,
-        "assets": {"photo": {"type": "image", "format": fmt,
-                             "data_base64": base64.b64encode(data).decode("ascii")}},
     }
 
 
@@ -85,7 +88,8 @@ def main():
         request = request_for(image)
         validate(request)
         if args.dry_run:
-            request["assets"]["photo"]["data_base64"] = "<elided>"
+            part = request["state"][1]["image_url"]
+            part["url"] = part["url"].split(",")[0] + ",<elided>"
             results[image.name] = request
             continue
         answers = ask(request)["answers"]
