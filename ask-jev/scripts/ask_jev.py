@@ -10,11 +10,19 @@ import sys
 # ponytail: conservative byte budget for the 32,000-token context; use the
 # provider's tokenizer if exact packing is needed.
 MAX_REQUEST_BYTES = 32_000
+MODEL = "typesafe/jev-1.14"
+IMAGE_FORMATS = {"png", "jpg", "jpeg"}
 
 
 def validate(payload):
-    if not isinstance(payload, dict) or set(payload) != {"state", "questions"}:
-        raise ValueError("Input must contain exactly state and questions.")
+    if not isinstance(payload, dict) or not {"state", "questions"} <= set(payload)             or not set(payload) <= {"state", "questions", "assets"}:
+        raise ValueError("Input must contain state and questions, plus optional assets.")
+    assets = payload.get("assets", {})
+    if not isinstance(assets, dict) or ("assets" in payload and not assets):
+        raise ValueError("assets must be a nonempty object.")
+    for name, asset in assets.items():
+        if not name or not isinstance(asset, dict) or asset.get("type") != "image"                 or asset.get("format") not in IMAGE_FORMATS                 or not isinstance(asset.get("data_base64"), str) or not asset["data_base64"]:
+            raise ValueError("Each asset needs type image, format png/jpg/jpeg, and data_base64.")
     if not isinstance(payload["state"], (str, dict, list)) or not payload["state"]:
         raise ValueError("state must be nonempty text, an object, or an array.")
     questions = payload["questions"]
@@ -23,11 +31,17 @@ def validate(payload):
     for name, question in questions.items():
         if not name or not isinstance(question, dict):
             raise ValueError("Each question needs an ID and an object.")
-        if set(question) != {"type", "instructions", "criteria"}:
-            raise ValueError("Each question needs type, instructions, and criteria.")
+        kind = question.get("type")
+        fields = {"type", "instructions"} if kind == "box" else {"type", "instructions", "criteria"}
+        if set(question) != fields:
+            raise ValueError("Each question needs type, instructions, and criteria (box: no criteria).")
         if not isinstance(question["instructions"], str) or not question["instructions"].strip():
             raise ValueError("Question instructions must be nonempty text.")
-        kind, criteria = question["type"], question["criteria"]
+        if kind == "box":
+            if not assets:
+                raise ValueError("box questions need an image in assets.")
+            continue
+        criteria = question["criteria"]
         if kind == "score":
             valid = isinstance(criteria, list) and len(criteria) >= 1
             descriptions = criteria if valid else []
@@ -37,11 +51,13 @@ def validate(payload):
                 valid = valid and set(criteria) == {"true", "false"}
             descriptions = criteria.values() if valid else []
         else:
-            raise ValueError("Question type must be choice, noul, or score.")
+            raise ValueError("Question type must be choice, noul, score, or box.")
         if not valid or not all(isinstance(x, str) and x.strip() for x in descriptions):
             raise ValueError("Invalid criteria; provide nonempty text descriptions.")
     # ASCII JSON also budgets escaped Unicode, nested state, IDs, and all rubrics.
-    size = len(json.dumps(payload, ensure_ascii=True, allow_nan=False).encode("ascii"))
+    # ponytail: image bytes are excluded; their token cost is undocumented.
+    text = {k: v for k, v in payload.items() if k != "assets"}
+    size = len(json.dumps(text, ensure_ascii=True, allow_nan=False).encode("ascii"))
     if size > MAX_REQUEST_BYTES:
         raise ValueError(
             f"Request is {size} serialized bytes; conservative Jev budget is "
@@ -55,13 +71,14 @@ def ask(payload):
     key = os.environ.get("JEV_API_KEY", "").strip()
     if not key:
         raise ValueError("Set JEV_API_KEY to your OpenRouter API key.")
-    body = json.dumps({**payload, "model": "~typesafe/jev-latest"}, allow_nan=False)
+    body = json.dumps({**payload, "model": MODEL}, allow_nan=False)
+    headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    if "assets" in payload:
+        # ponytail: TypeSafe's image opt-in; OpenRouter does not document assets.
+        headers["TypeSafe-Danger-Zone-Images"] = "true"
     connection = http.client.HTTPSConnection("openrouter.ai", timeout=60)
     try:
-        connection.request("POST", "/api/alpha/decisions", body.encode("utf-8"), {
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-        })
+        connection.request("POST", "/api/alpha/decisions", body.encode("utf-8"), headers)
         response = connection.getresponse()
         if response.status != 200:
             raise ValueError(f"OpenRouter HTTP {response.status}; no retry was made.")

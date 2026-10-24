@@ -1,6 +1,6 @@
 ---
 name: ask-jev
-description: Ask Jev through OpenRouter for structured decisions from plain-text context and questions, choices, or score levels. Use when the user says ask-jev or asks to consult Jev.
+description: Ask Jev through OpenRouter for structured decisions (choices, yes/no, scores, image bounding boxes) from text or image context. Use when the user says ask-jev or asks to consult Jev.
 ---
 
 # Ask Jev
@@ -44,6 +44,22 @@ Create a `questions` object keyed by short, stable IDs. Each question has
   Jev scores are fractional, zero-based level indices. Preserve the user's level
   order and labels. For a 1–5 scale, supply five descriptions and report raw score
   plus the explicitly labeled conversion `raw + 1`. Never silently change scales.
+- `box`: locates something in an image; has only `type` and `instructions`
+  (no `criteria`). The answer has `box` with `top`, `bottom`, `left`, `right`
+  as 0–1 fractions of image height/width from the top-left, plus `confidence`
+  (may be `null`). A box is returned even if the object is absent, so pair it
+  with a `choice` or `noul` presence question.
+
+### Images
+
+Add a top-level `assets` object keyed by a placeholder name; use that name as
+the whole `state` (or inside it, instructions, or criteria) where the image goes:
+`{"state": "photo", "assets": {"photo": {"type": "image", "format": "png",
+"data_base64": "..."}}, "questions": {...}}`. Formats are `png`, `jpg`, `jpeg`;
+convert others (for example webp) first. The helper then sends the
+`TypeSafe-Danger-Zone-Images: true` header. Image input is documented by
+TypeSafe, not OpenRouter; if OpenRouter rejects it, report the error.
+Images go to OpenRouter and TypeSafe.
 
 Use one question per judgment and batch questions sharing the same context into
 one request. Write concrete, neutral criteria without inventing facts. If the
@@ -57,7 +73,7 @@ only when that preserves its intent. Do not use Jev for arithmetic or counting.
 
 Jev Latest currently has a [32,000-token context window](https://openrouter.ai/~typesafe/jev-latest)
 (verified September 22, 2026). Budget the state, question IDs, instructions, and
-all criteria together.
+all criteria together. Image `assets` are not counted by the guard.
 The helper enforces a conservative 32,000-byte limit on ASCII-serialized request
 JSON before opening a connection. This is not an exact token count and may reject
 text that would fit; escaped Unicode also counts toward the budget. No output
@@ -102,7 +118,7 @@ python3 /absolute/path/to/ask-jev/scripts/ask_jev.py <<'JEV_REQUEST'
 JEV_REQUEST
 ```
 
-The helper fixes the model to `~typesafe/jev-latest` and sends one authenticated
+The helper pins the model to `typesafe/jev-1.14` (Jev 1.14.0) and sends one authenticated
 POST to `https://openrouter.ai/api/alpha/decisions`. This is the Decisions API,
 not chat completions; do not send `messages` or `response_format`. It has a
 60-second timeout and no automatic retries. On failure, report it; never
@@ -127,6 +143,7 @@ available, especially if the user asks. Supply raw JSON when requested.
 - [Model alias](https://openrouter.ai/~typesafe/jev-latest)
 - [Decisions request and response schema](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request)
 - [Jev capabilities](https://docs.typesafe.ai/concepts/system-one)
+- [Images and box questions](https://docs.typesafe.ai/api)
 
 Run the offline check: `python3 scripts/test_ask_jev.py` from this skill folder.
 Run the live check: `python3 scripts/check_ask_jev_online.py` from this skill

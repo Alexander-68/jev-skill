@@ -4,7 +4,7 @@ import copy
 import json
 from unittest.mock import patch
 
-from ask_jev import MAX_REQUEST_BYTES, ask, validate
+from ask_jev import MAX_REQUEST_BYTES, MODEL, ask, validate
 
 
 payload = {
@@ -32,9 +32,35 @@ with patch.dict("os.environ", {"JEV_API_KEY": "test-key"}), \
     transport.assert_called_once_with("openrouter.ai", timeout=60)
     method, path, body, headers = connection.request.call_args.args
     assert (method, path) == ("POST", "/api/alpha/decisions")
-    assert json.loads(body) == {**payload, "model": "~typesafe/jev-latest"}
+    assert json.loads(body) == {**payload, "model": MODEL}
     assert headers["Authorization"] == "Bearer test-key"
+    assert "TypeSafe-Danger-Zone-Images" not in headers
     connection.close.assert_called_once()
+
+    image = {"state": "photo", "assets": {"photo": {
+        "type": "image", "format": "png", "data_base64": "x" * MAX_REQUEST_BYTES}},
+        "questions": {"cat": {"type": "box", "instructions": "Locate the cat."}}}
+    boxed = {"answers": {"cat": {"type": "box", "confidence": None, "box": {
+        "top": 0.1, "bottom": 0.9, "left": 0.2, "right": 0.8}}}}
+    response.read.return_value = json.dumps(boxed).encode()
+    assert ask(image) == boxed  # image bytes do not count toward the text budget
+    method, path, body, headers = connection.request.call_args.args
+    assert json.loads(body)["assets"] == image["assets"]
+    assert headers["TypeSafe-Danger-Zone-Images"] == "true"
+    response.read.return_value = json.dumps(result).encode()
+    calls = connection.request.call_count
+    bad_images = [{**image, "assets": {}}, {**image, "assets": {"photo": {
+        **image["assets"]["photo"], "format": "webp"}}},
+        {**image, "questions": {"cat": {**image["questions"]["cat"], "criteria": {}}}},
+        {k: v for k, v in image.items() if k != "assets"}]
+    for bad in bad_images:
+        try:
+            ask(bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid image request accepted")
+    assert connection.request.call_count == calls
 
     for bad in ({}, {**payload, "questions": []}):
         try:
@@ -51,7 +77,7 @@ with patch.dict("os.environ", {"JEV_API_KEY": "test-key"}), \
         pass
     else:
         raise AssertionError("Invalid score criteria accepted")
-    assert connection.request.call_count == 1
+    assert connection.request.call_count == 2
 
     for status, data in [(401, {}), (429, {}), (200, {"error": {}}),
                          (200, {"answers": {}}), (200, [])]:
